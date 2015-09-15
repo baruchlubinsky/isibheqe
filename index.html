@@ -1,0 +1,303 @@
+<html>
+	<head>
+		<script type="text/javascript" src="lib/jquery-2.1.4.js" ></script>
+		<script type="text/javascript" src="lib/isibheqe-glyphs.js" ></script>
+		<script type="text/javascript" src="lib/key-mappings.js" ></script>
+		<script type="text/javascript">
+
+		var UNIT = 3;
+		var factory = new GlyphFactory(UNIT);
+		var cursor = new Point(0, 0);
+		var buffer = new Array();
+		var currentVowel;
+		var sentence = new Array();
+
+		var canvasWidth = 800;
+		var canvasHeight = 400;
+
+		var lineHeight = 100;
+		var spaceWidth = 45;
+
+		var space = {
+			renderOn: function () {
+				
+			}
+		}
+		var enter = {
+			renderOn: function () {
+				
+			}
+		}
+
+		makeTarget = function(context) {
+			var target = {element: context};	
+
+			target.drawLine = function(a, b) {
+				this.element.beginPath();
+				this.element.moveTo(a.x, a.y);
+				this.element.lineTo(b.x, b.y);
+				this.element.closePath();
+				this.element.stroke();
+			}
+			target.drawArc = function(x, y, radius, start, end) {
+				this.element.beginPath();
+				this.element.arc(x, y, radius, start, end, true);
+				this.element.stroke();
+			}
+			return target		
+		}
+
+		$(function() {
+
+
+			$(document).keypress(function(event){
+				if($("#isibheqe-serialization").is(":focus")){
+					return;
+				}
+				var key;
+				if(event.ctrlKey && event.which === 26) {
+					sentence.pop();
+					cursor = buffer.pop();
+					render();
+					serialize();
+					event.preventDefault();
+					return;
+				}
+				if (event.which === 13) {
+					key = "enter";
+				}
+				else if (event.which === 32) {
+					key = "space";
+					event.preventDefault();
+				} else {
+					var input = String.fromCharCode(event.charCode);
+					if (keyMapping[input] !== undefined) {
+						key = keyMapping[input];
+					}
+				}
+				addLetter(key);
+				render();
+				serialize();
+			});
+
+			$("#isibheqe-sync").click(function(event){
+				deserialize($("#isibheqe-serialization").val());
+			})
+
+			render = function() {
+				var canvas = document.createElement('canvas');
+				canvas.id     = "isibheqe-canvas";
+				canvas.width  = canvasWidth;
+				canvas.height = canvasHeight;
+				var context = canvas.getContext("2d");
+				var target = makeTarget(context);
+				
+				for(var i = 0; i < sentence.length; i++) {
+					sentence[i].renderOn(target);
+				}
+
+				$("#isibheqe-frame").children().replaceWith(canvas);
+			}
+
+			serialize = function() {
+				var output = [];
+				for(var i = 0; i < sentence.length; i++) {
+					var elem = sentence[i];
+					if(elem === space) {
+						output.push(" ");
+						continue;
+					}
+					if(elem === enter) {
+						output.push("\n");
+						continue;
+					}
+					var v = elem.vowel;
+					var c = elem.consonants;
+					if(c.length > 0) {
+						output.push([v,c]);
+					} else {
+						output.push(v);
+					}
+				}
+				$("#isibheqe-serialization").val(JSON.stringify(output));
+			}
+
+			deserialize = function(data) {
+				var loaded = JSON.parse(data);
+				cursor = new Point(0, 0);
+				buffer = new Array();
+				currentVowel = undefined;
+				sentence = new Array();
+				for(var i = 0; i < loaded.length; i++) {
+					var elem = loaded[i];
+					if(typeof elem === "string") {
+						if(elem === " ") {
+							addLetter("space");
+							continue;
+						} 
+						if(elem === "\n") {
+							addLetter("enter");
+							continue;	
+						}
+						addLetter(elem);
+					} else {
+						addLetter(elem[0]);
+						for(var j = 0; j < elem[1].length; j++) {
+							addLetter(elem[1][j]);
+						}
+					}
+				}
+				render();
+				serialize();
+			}
+			
+			addLetter = function(key) {
+				if(cursor.y + lineHeight >= canvasHeight) {
+					canvasHeight = canvasHeight + lineHeight;
+					$("#isibheqe-frame").scrollTop(cursor.y);
+				}
+				if(VOWELS.indexOf(key) >= 0) {
+					if(currentVowel !== undefined) {
+						buffer.push(cursor);
+						cursor = cursor.translate(new Point(currentVowel.kerning(), 0));
+					}
+					currentVowel = factory.newVowel(key, cursor);
+					sentence.push(currentVowel);
+					
+				} else if(CONSONANTS.indexOf(key) >= 0) {
+					if(currentVowel !== undefined) {
+						currentVowel.addConsonant(key);
+					} else {
+						return;
+					}
+				} else if(key === "space") {
+					buffer.push(cursor);
+					cursor = cursor.translate(new Point(currentVowel.kerning(), 0));
+					currentVowel = undefined;
+					cursor = cursor.translate(new Point(spaceWidth, 0));
+					sentence.push(space);
+					return;
+				} else if(key === "enter") {
+					currentVowel = undefined;
+					buffer.push(cursor);
+					cursor = new Point(0, cursor.y + lineHeight);
+					sentence.push(enter);
+					return;
+				} else {
+					return;
+				}
+			}
+
+			var vowelKeyboard = $("#isibheqe-vowels");
+			for (var i = 0; i < VOWELS.length; i++) {
+				var vowel = VOWELS[i];
+				var key = document.createElement("div");
+				key.className = "isibheqe-letter";
+				var canvas = document.createElement("canvas");
+				canvas.width = 48;
+				canvas.height = 80;
+				var context = canvas.getContext("2d");
+				var keyTarget = makeTarget(context);
+				var glyph = factory.newVowel(vowel, new Point(0,0));
+				glyph.renderOn(keyTarget);
+				
+				key.appendChild(canvas);
+				$(key).attr("x-data-isibheqe", vowel);
+				$(key).click(function(event){
+					var div = $(event.currentTarget);
+					var thisKey = div.attr("x-data-isibheqe");
+					addLetter(thisKey);
+					render();
+					serialize();
+				});
+				vowelKeyboard.append(key);
+			}
+
+			var consonantKeyboard = $("#isibheqe-consonants");
+			for (var i = 0; i < CONSONANTS.length; i++) {
+				var consonant = CONSONANTS[i];
+				var key = document.createElement("div");
+				key.className = "isibheqe-letter";
+				var canvas = document.createElement("canvas");
+				canvas.width = 48;
+				canvas.height = 80;
+				var context = canvas.getContext("2d");
+				var keyTarget = makeTarget(context);
+				var glyph = factory.newVowel("i", new Point(0,0));
+				glyph.addConsonant(consonant);
+				glyph.renderOn(keyTarget);
+				key.appendChild(canvas);
+				$(key).attr("x-data-isibheqe", consonant);
+				$(key).click(function(event){
+					var div = $(event.currentTarget);
+					var thisKey = div.attr("x-data-isibheqe");
+					addLetter(thisKey);
+					render();
+					serialize();
+				});
+				consonantKeyboard.append(key);
+			}
+		});
+		</script>
+	</head>
+	<style>
+			div.new-line {
+				clear: left;
+			}
+			div.isibheqe-letter {
+				width:48;
+				height:80;
+				float:left;
+			}
+
+			div.isibheqe-display {
+				width: 100%;
+			}
+
+			div.isibheqe-input {
+				width: 100%;
+			}
+
+			div.isibheqe-frame {
+				float: left;
+				overflow: scroll;
+				width: 800;
+				height: 400;
+			}
+
+			div#isibheqe-text-frame {
+				float: right;
+				width: 240;
+				height: 400;
+			}
+
+			div#isibheqe-text-frame textarea {
+				width: 100%;
+				height: 180;
+			}
+	</style>
+	</body>
+		<div class="isibheqe-display">
+			<div id="isibheqe-frame" class="isibheqe-frame">
+				<canvas id="isibheqe-canvas" width="800" height="400"></canvas>
+			</div>
+
+			<div id="isibheqe-text-frame">
+				<textarea id="isibheqe-serialization" width="240"></textarea>
+				<button id="isibheqe-sync"> << Sync </button>
+			</div>
+		<div>
+		<div class="new-line" ></div>
+		<div class="isibheqe-input">
+			<div class="isibheqe-keyboard-container">
+				<div id="isibheqe-vowels" class="isibheqe-keyboard">
+
+				</div>
+				<div class="new-line" ></div>
+				<div id="isibheqe-consonants" class="isibheqe-keyboard">
+
+				</div>
+			</div>
+		</div>
+	</body>
+</html>
