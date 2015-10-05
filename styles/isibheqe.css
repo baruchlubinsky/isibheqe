@@ -1,0 +1,34 @@
+div.new-line {
+	clear: left;
+}
+div.isibheqe-letter {
+	width:48;
+	height:80;
+	float:left;
+}
+
+div.isibheqe-display {
+	width: 100%;
+}
+
+div.isibheqe-input {
+	width: 100%;
+}
+
+div.isibheqe-frame {
+	float: left;
+	overflow: scroll;
+	width: 800;
+	height: 400;
+}
+
+div#isibheqe-text-frame {
+	float: right;
+	width: 240;
+	height: 400;
+}
+
+div#isibheqe-text-frame textarea {
+	width: 100%;
+	height: 180;
+}
